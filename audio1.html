@@ -72,7 +72,7 @@
 
     <script src="STREAM.js"></script>
     
-    <div id = "info" >Awesome example made by <a href="http://twitter.com/soulwire" target="_blank">Soulwire</a>, but with palm normal gravity source. <br/><br/> And the particle texture is the data texture</div> 
+    <div id = "info" >Awesome example made by <a href="http://twitter.com/soulwire" target="_blank">Soulwire</a>, but with palm normal gravity source.<br/><br/>Audio : Slasherr - Rustie</div> 
 
     <canvas id="canvas"></canvas>
     <canvas id="audioData"></canvas>
@@ -170,13 +170,15 @@
 
                 //delta = delta*.7 + audioDelta *.3;
                 // Add a force along the delta vector
+                
+                //Attractive Force
                 vel += delta * 0.05;
-                vel.x += audio.x * .01;
-                vel.y += audio.y * .01;
-                vel.z += audio.z * .01;
+
+                //replusive Force
+                vel -= delta * audio.xyz * .06;
 
                 // Add a drag force
-                vel *= (.9 + (audio.w*.1) );
+                vel *= (.99 + (audio.w*.03) );
 
             } else {
 
@@ -213,7 +215,7 @@
 
         gl_Position = vec4( particle.xyz, perspective );
 
-        gl_PointSize = ( 1.0 / perspective ) * min( 30.0 , ( 5.0 + phase*20.0 ));
+        gl_PointSize = audio.x*( 1.0 / perspective ) * min( 30.0 , ( 5.0 + phase*20.0 ));
     }
 
     </script>
@@ -443,7 +445,7 @@
 
     */
     var frequencyBinCount = AUDIO_BIN_COUNT;
-    var audio = new STREAM("nothingHere.mp3");
+    var audio = new STREAM("slasherr.mp3");
     audio.start();
     //masterGain.gain.value = 0;
 
@@ -754,6 +756,10 @@
 
             for ( j = 0, m = chunk.size; j < m; j++ ) {
 
+              var audio = freqByteData[Math.floor(m)];
+              //console.log(audio);
+              //console.log(m);
+
                 data.push(
 
                     // Move the particle to the emission origin
@@ -765,9 +771,9 @@
                     Math.random() * 10,
 
                     // Populate the velocity slot with an initial random force
-                    velocities.x + force * ( -1 + Math.random() * 2 ),
-                    velocities.y + force * ( -1 + Math.random() * 2 ),
-                    velocities.z + force * ( -1 + Math.random() * 2 ),
+                    velocities.x + force * ( -1 + Math.random() * Math.cos(audio) *5 ),
+                    velocities.y + force * ( -1 + Math.random() * Math.cos(audio) *5 ),
+                    velocities.z + force * ( -1 + Math.random() * Math.cos(audio) *5 ),
 
                     // Empty data slot
                     0
@@ -822,7 +828,7 @@
             }
             hand = hands[i];
 
-            emitParticles( 10 + Math.random() * 10, {
+            emitParticles( 10 + Math.random() * 500, {
                 x: hand.palmPosition.x / 200,
                 y: (hand.palmPosition.y / 200) - 1,
                 z: (hand.palmPosition.z / 400) * -1,
@@ -948,7 +954,7 @@
 
         if ( gl.showDataTexture ) {
 
-            gl.viewport( 20, 20, 1000, 300 );
+            gl.viewport( 20, 20, 100, 300 );
             gl.useProgram( debugProgram );
             gl.bindBuffer( gl.ARRAY_BUFFER, viewportQuadBuffer );
             gl.vertexAttribPointer( debugProgram.aVertexPositionLoc, 2, gl.FLOAT, gl.FALSE, 0, 0 );
