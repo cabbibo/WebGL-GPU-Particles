@@ -94,14 +94,23 @@
 
     uniform vec3 uTargetPosition;
     uniform sampler2D uParticleData;
+    uniform sampler2D uAudioData;
     uniform vec2 uViewport;
 
     // Retrieves the texel at a given offset from the current pixel
     vec4 texelAtOffet( vec2 offset ) {
         return texture2D( uParticleData, ( gl_FragCoord.xy + offset ) / uViewport );
     }
+      // Retrieves the texel at a given offset from the current pixel
+    vec4 audioAtOffet( vec2 offset ) {
+        return texture2D( uAudioData, ( gl_FragCoord.xy + offset ) / uViewport );
+    }
+
+
 
     void main() {
+
+        vec4 audio = texture2D( uAudioData , vec2(gl_FragCoord.x , 0.0) );
 
         // Determine which data slot we're at (position or velocity)
         int slot = int( mod( gl_FragCoord.x, 2.0 ) );
@@ -111,6 +120,7 @@
             // Retrieve data at current and adjacent slots
             vec4 dataA = texelAtOffet( vec2( 0, 0 ) );
             vec4 dataB = texelAtOffet( vec2( 1, 0 ) );
+            audio = audioAtOffet( vec2(0,0) );
 
             // Extract position and velocity data
             vec3 pos = dataA.xyz;
@@ -122,6 +132,9 @@
 
                 // Integrate velocity
                 pos += vel * 0.001;
+                //pos.x += audio.x * .01;
+                //pos.y += audio.y * .01;
+                //pos.z += audio.z * .01;
 
                 // Kill the particle if it's near the target
                 if ( length( uTargetPosition - pos ) < 0.035 ) phase = 0.0;
@@ -140,6 +153,8 @@
             // Retrieve data at current and previous slots
             vec4 dataA = texelAtOffet( vec2( -1, 0 ) );
             vec4 dataB = texelAtOffet( vec2( 0, 0 ) );
+            audio = audioAtOffet( vec2(-1,0) );
+
 
             // Extract position and velocity data
             vec3 pos = dataA.xyz;
@@ -151,12 +166,17 @@
 
                 // Compute a normalised vector pointing towards target
                 vec3 delta = normalize( uTargetPosition - pos );
+                vec3 audioDelta = normalize( uTargetPosition - audio.xyz);
 
+                //delta = delta*.7 + audioDelta *.3;
                 // Add a force along the delta vector
                 vel += delta * 0.05;
+                vel.x += audio.x * .01;
+                vel.y += audio.y * .01;
+                vel.z += audio.z * .01;
 
                 // Add a drag force
-                vel *= 0.991;
+                vel *= (.9 + (audio.w*.1) );
 
             } else {
 
@@ -191,9 +211,9 @@
         float perspective = 1.0 + particle.z * 5.5;
         float phase = cos( particle.w ) * max( 0.5, tan( particle.z * 8.05 ) );
 
-        gl_Position = vec4( audio.xyz, perspective );
+        gl_Position = vec4( particle.xyz, perspective );
 
-        gl_PointSize = ( 1.0 / perspective ) * min( 120.0 , ( 10.0 + phase*20.0 ));
+        gl_PointSize = ( 1.0 / perspective ) * min( 30.0 , ( 5.0 + phase*20.0 ));
     }
 
     </script>
@@ -219,7 +239,7 @@
       color.y = color.y * texture.y * .8;
       color.z = color.z * texture.z * .4;
 
-      gl_FragColor = vec4( audio , .1);
+      gl_FragColor = vec4( audio*texture , .1);
 
     }
 
@@ -476,6 +496,9 @@
     
     // Adding in the ability for the user to change the target with their palm
     physicsProgram.uTargetPositionLoc = gl.getUniformLocation( physicsProgram, 'uTargetPosition' );
+
+    //adding some audio to the physics
+    physicsProgram.uAudioDataLoc = gl.getUniformLocation( physicsProgram, 'uAudioData' );
     
     physicsProgram.uParticleDataLoc = gl.getUniformLocation( physicsProgram, 'uParticleData' );
     physicsProgram.uViewportLoc = gl.getUniformLocation( physicsProgram, 'uViewport' );
@@ -554,7 +577,7 @@
 
     // Create a texture to hold the particle data
     var audioDataTexture = gl.createTexture();
-    audioDataTexture.unit = 0;
+    audioDataTexture.unit = 2;
 
     // Activate the correct texture unit and bind the texture to it
     gl.activeTexture( gl.TEXTURE0 + audioDataTexture.unit );
@@ -649,6 +672,7 @@
 
     // Set physics program uniform values
     gl.useProgram( physicsProgram );
+    gl.uniform1i( physicsProgram.uAudioDataLoc, audioDataTexture.unit);
     gl.uniform1i( physicsProgram.uParticleDataLoc, 0 );
     gl.uniform2f( physicsProgram.uViewportLoc, PARTICLE_TEXTURE_WIDTH, PARTICLE_TEXTURE_HEIGHT );
    
@@ -781,30 +805,33 @@
         var fingers = frame.pointables;
         var finger;
 
-        for ( var i = 0, n = fingers.length; i < n; i++ ) {
+        var hands = frame.hands
 
-            finger = fingers[i];
+        var hand;
+        for ( var i = 0, n = hands.length; i < n; i++ ) {
 
-            emitParticles( 110 + Math.random() * 90, {
-                x: finger.tipPosition.x / 200,
-                y: (finger.tipPosition.y / 200) - 1,
-                z: (finger.tipPosition.z / 400) * -1,
+            if( i == 0 ){
+              var x = hands[0].palmNormal.x;
+              var y = hands[0].palmNormal.y;
+              var z = hands[0].palmNormal.z;
+
+              gl.useProgram( physicsProgram);
+              gl.uniform3f( physicsProgram.uTargetPositionLoc , x , y , z );
+
+
+            }
+            hand = hands[i];
+
+            emitParticles( 10 + Math.random() * 10, {
+                x: hand.palmPosition.x / 200,
+                y: (hand.palmPosition.y / 200) - 1,
+                z: (hand.palmPosition.z / 400) * -1,
             },{
-                x: finger.tipVelocity.x / 100,
-                y: finger.tipVelocity.y / 120,
-                z: finger.tipVelocity.z / 180
+                x: hand.palmVelocity.x / 100,
+                y: hand.palmVelocity.y / 120,
+                z: hand.palmVelocity.z / 180
             });
           }
-
-        var hands = frame.hands
-        if(hands[0]){
-          var x = hands[0].palmNormal.x;
-          var y = hands[0].palmNormal.y;
-          var z = hands[0].palmNormal.z;
-
-          gl.useProgram( physicsProgram);
-          gl.uniform3f( physicsProgram.uTargetPositionLoc , x , y , z );
-        }
     });
 
     // Add Stats.js so we can monitor the FPS
@@ -823,7 +850,8 @@
 
     function updateAudio(){
         
-        // Bind the particle data texture since we'll be updating it
+      // Bind the particle data texture since we'll be updating it
+
         gl.activeTexture( gl.TEXTURE0 + audioDataTexture.unit );
         gl.bindTexture( gl.TEXTURE_2D, audioDataTexture );
 
@@ -849,10 +877,15 @@
                 gl.TEXTURE_2D, 0, x, y , 1, 1,
                 // data format, data type, pixels
                 gl.RGBA, gl.FLOAT, new Float32Array([r/256,g/256,b/256,a/256 ])
-                );
+            );
           }
           //console.log(freqByteData[10]);
           //console.log(imageData)*/
+          gl.useProgram( renderProgram);
+          //gl.uniform3f( );
+
+
+
         }
 
 
@@ -865,6 +898,7 @@
         // Schedule next update
         requestAnimationFrame( update );
 
+         updateAudio();
         // Bind the particle data texture since we'll be updating it
         gl.activeTexture( gl.TEXTURE0 + particleDataTexture.unit );
         gl.bindTexture( gl.TEXTURE_2D, particleDataTexture );
@@ -882,10 +916,10 @@
         // Tell WebGL to use the particle FBO, not the front buffer for (offscreen) rendering
         gl.bindFramebuffer( gl.FRAMEBUFFER, particleFramebuffer );
         gl.drawArrays( gl.TRIANGLE_STRIP, 0, 4 );
-
+           
         // Unbind the FBO, WebGL will now use the default buffer for rendering
         gl.bindFramebuffer( gl.FRAMEBUFFER, null );
-
+        
         // 2. Render step
 
         // Clear the front buffer (if we had called clear when the particle FBO was bound, it
@@ -899,10 +933,15 @@
         gl.useProgram( renderProgram );
         gl.bindBuffer( gl.ARRAY_BUFFER, particleUVDataBuffer );
         gl.vertexAttribPointer( renderProgram.aParticleUVLoc, 2, gl.FLOAT, gl.FALSE, 0, 0 );
+        
+        gl.activeTexture( gl.TEXTURE0 + particleDataTexture.unit );
+        gl.bindTexture( gl.TEXTURE_2D, particleDataTexture );
+
+
 
         // Draw with additive blending
         gl.enable( gl.BLEND );
-        gl.blendFunc( gl.SRC_ALPHA , gl.ONE );
+        gl.blendFunc( gl.SRC_COLOR , gl.ONE );
         gl.drawArrays( gl.POINTS, 0, PARTICLE_COUNT );
 
         // 3. Debug step
@@ -919,7 +958,7 @@
             gl.drawArrays( gl.TRIANGLE_STRIP, 0, 4 );
         }
 
-        updateAudio();
+       //updateAudio();
         if( gl.showAudioTexture ){
 
             // Bind the particle data texture since we'll be updating it
@@ -938,45 +977,6 @@
         }
 
         gl.disable( gl.BLEND );
-
-
-    
-        // 4. Audio Step
-
-     
-        //Sets creates the image data
-       /* imageData = aC.createImageData( width , height );
-
-        if(audio.analyser){
-          
-          freqByteData = new Uint8Array( audio.analyser.frequencyBinCount );
-          audio.analyser.getByteFrequencyData( freqByteData );
-
-          //transfers audio data to rgb values
-          for (var i = 0; i < width ; i++ ) {
-            x = i;
-            y = 0;
-            var startingData = i*4;
-            r = freqByteData[startingData] //| 0;
-            g = freqByteData[startingData+1]// | 0;       
-            b = freqByteData[startingData+2]// | 0;
-            a = freqByteData[startingData+3]// | 0;
-            setPixel(imageData, x, y, r, g, b, a); 
-          }
-
-           // Now we modify the pixels of the particle data texture inside the chunk boundaries
-            /*gl.texSubImage2D(
-                // target, detail level, x, y, width, height
-                gl.TEXTURE_2D, 0, chunk.x, chunk.y, chunk.size, 1,
-                // data format, data type, pixels
-                gl.RGBA, gl.FLOAT, new Float32Array( data )
-            );
-          //console.log(freqByteData[10]);
-          //console.log(imageData)
-        }
-
-        aC.putImageData(imageData, 0 , 0 );*/
-
 
         stats.end();
     }
